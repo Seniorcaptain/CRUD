@@ -1,0 +1,350 @@
+# 🗄️ Flask REST API & SQLite Database — CRUD Lab
+
+> **AfricaHackon | AH200 Advanced Coding & MySQL Integration | December 2025**
+> Built a fully functional RESTful API using Python Flask + SQLAlchemy + SQLite, implementing all CRUD operations and tested every endpoint with Postman.
+
+---
+
+## 🎯 Objective
+
+Design and deploy a production-structured Flask API that exposes full **Create, Read, Update, Delete** operations on a student records database — simulating a real-world backend service.
+
+---
+
+## 🏗️ Project Architecture
+
+```
+api/
+├── app.py                  ← Application factory + blueprint registration
+├── config.py               ← Database URI and app config
+├── extensions.py           ← SQLAlchemy + Bcrypt instances
+├── models/
+│   ├── __init__.py
+│   └── student_model.py    ← Student ORM model (SQLite table definition)
+├── routes/
+│   ├── __init__.py
+│   └── students.py         ← All CRUD route handlers
+├── students.db             ← SQLite database file
+└── venv/                   ← Python virtual environment
+```
+
+---
+
+## 🧰 Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Language | Python 3.13 |
+| Web Framework | Flask |
+| ORM | SQLAlchemy (via Flask-SQLAlchemy) |
+| Database | SQLite (`students.db`) |
+| Auth Utilities | Flask-Bcrypt |
+| API Testing | Postman |
+| IDE | Visual Studio Code |
+
+---
+
+## 📦 Setup & Installation
+
+```bash
+# Clone / navigate to project
+cd api/
+
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install flask flask-sqlalchemy flask-bcrypt
+
+# Run the application
+python3 app.py
+```
+
+The server starts at `http://127.0.0.1:5000`.
+
+---
+
+## 🗃️ Database Schema
+
+**Table: `students`**
+
+| Column | Type | Constraints |
+|--------|------|-------------|
+| `id` | INTEGER | Primary Key, Auto-Increment |
+| `name` | VARCHAR(100) | NOT NULL |
+| `age` | INTEGER | NOT NULL |
+| `email` | VARCHAR(100) | UNIQUE, NOT NULL |
+
+### SQLAlchemy Model (`student_model.py`)
+
+```python
+from extensions import db
+
+class Student(db.Model):
+    # Primary key column
+    id    = db.Column(db.Integer, primary_key=True)
+
+    # Student name (max 100 characters)
+    name  = db.Column(db.String(100), nullable=False)
+
+    # Student age
+    age   = db.Column(db.Integer, nullable=False)
+
+    # Student email (unique constraint)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+```
+
+---
+
+## ⚙️ Application Factory (`app.py`)
+
+```python
+from flask import Flask
+from routes.students import students_bp
+from extensions import db
+from config import Config
+
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object(Config)
+
+    db.init_app(app)
+
+    # Register student routes under /api prefix
+    app.register_blueprint(students_bp, url_prefix="/api")
+
+    # Create tables on startup
+    with app.app_context():
+        db.create_all()
+
+    return app
+
+if __name__ == "__main__":
+    app = create_app()
+    app.run(debug=True)
+```
+
+---
+
+## 🔌 Extensions (`extensions.py`)
+
+```python
+from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
+
+db     = SQLAlchemy()
+bcrypt = Bcrypt()
+```
+
+---
+
+## 🛣️ API Endpoints
+
+| Method | Endpoint | Description | Status Code |
+|--------|----------|-------------|------------|
+| `GET` | `/api/students` | Retrieve all student records | 200 OK |
+| `POST` | `/api/students` | Create a new student | 201 Created |
+| `PUT` | `/api/students/<id>` | Update student by ID | 200 OK |
+| `DELETE` | `/api/students/<id>` | Delete student by ID | 200 OK |
+
+---
+
+## 📝 Route Implementation (`routes/students.py`)
+
+```python
+from flask import Blueprint, request, jsonify
+from models.student_model import Student
+from extensions import db
+
+students_bp = Blueprint("students", __name__)
+
+# ── CREATE ────────────────────────────────────────────────────────────────────
+@students_bp.route("/students", methods=["POST"])
+def create_student():
+    data  = request.get_json()
+    name  = data.get("name")
+    age   = data.get("age")
+    email = data.get("email")
+
+    if not name or not age or not email:
+        return jsonify({"error": "All fields required"}), 400
+
+    student = Student(name=name, age=age, email=email)
+    db.session.add(student)
+    db.session.commit()
+    return jsonify({"message": "Student added"}), 201
+
+# ── READ ──────────────────────────────────────────────────────────────────────
+@students_bp.route("/students", methods=["GET"])
+def get_students():
+    students = Student.query.all()
+    return jsonify([
+        {"id": s.id, "name": s.name, "age": s.age, "email": s.email}
+        for s in students
+    ]), 200
+
+# ── UPDATE ────────────────────────────────────────────────────────────────────
+@students_bp.route("/students/<int:id>", methods=["PUT"])
+def update_student(id):
+    student = Student.query.get_or_404(id)
+    data    = request.get_json()
+
+    student.name  = data.get("name",  student.name)
+    student.age   = data.get("age",   student.age)
+    student.email = data.get("email", student.email)
+
+    db.session.commit()
+    return jsonify({"message": "Student updated"}), 200
+
+# ── DELETE ────────────────────────────────────────────────────────────────────
+@students_bp.route("/students/<int:id>", methods=["DELETE"])
+def delete_student(id):
+    student = Student.query.get_or_404(id)
+    db.session.delete(student)
+    db.session.commit()
+    return jsonify({"message": "Student deleted"}), 200
+```
+
+---
+
+## 🧪 Postman API Testing
+
+All endpoints were tested and validated using Postman.
+
+### GET `/api/students` — Retrieve All Records
+
+**Response `200 OK`:**
+
+```json
+[
+  {
+    "age": 25,
+    "email": "elvis@example.com",
+    "id": 1,
+    "name": "Elvis"
+  },
+  {
+    "age": 29,
+    "email": "james@example.com",
+    "id": 2,
+    "name": "james"
+  }
+]
+```
+
+📸 *Screenshot: Postman GET request — 200 OK response with student records*
+
+---
+
+### POST `/api/students` — Create Student
+
+**Request body:**
+
+```json
+{
+  "name": "linda",
+  "age": 20,
+  "email": "linda@gmail.com"
+}
+```
+
+**Response `201 Created`:**
+
+```json
+{
+  "message": "Student added"
+}
+```
+
+📸 *Screenshot: Postman POST request — 201 Created, Student added*
+
+---
+
+### PUT `/api/students/1` — Update Student
+
+**Request body:**
+
+```json
+{
+  "name": "elvis",
+  "age": 31,
+  "email": "elvis456@gmail.com"
+}
+```
+
+**Response `200 OK`:**
+
+```json
+{
+  "message": "Student updated"
+}
+```
+
+📸 *Screenshot: Postman PUT request — 200 OK, Student updated*
+
+---
+
+### DELETE `/api/students/1` — Delete Student
+
+**Response `200 OK`:**
+
+```json
+{
+  "message": "Student deleted"
+}
+```
+
+📸 *Screenshot: Postman DELETE request — 200 OK, Student deleted*
+
+---
+
+## 🔒 Security Observations
+
+During testing, the following security considerations were identified and noted for hardening:
+
+| Vulnerability | Risk | Mitigation |
+|---------------|------|-----------|
+| No authentication on endpoints | Unauthenticated CRUD access | Implement JWT Bearer token auth |
+| SQLite in production | Not scalable, no encryption at rest | Migrate to PostgreSQL + pgcrypto |
+| Debug mode enabled | Stack traces exposed in errors | Set `debug=False` in production |
+| No input length validation | Oversized payloads accepted | Add `max_length` checks on all fields |
+| No rate limiting | API abuse / enumeration | Implement Flask-Limiter |
+
+---
+
+## 🗺️ MITRE ATT&CK Relevance
+
+Understanding this API architecture informs the following attack patterns in AppSec assessments:
+
+```
+T1190 — Exploit Public-Facing Application
+  └─ Unsecured REST APIs are primary targets for unauthenticated data access
+
+T1213 — Data from Information Repositories
+  └─ /api/students (GET) exposes full database contents without auth
+
+CWE-306 — Missing Authentication for Critical Function
+CWE-89  — SQL Injection (prevented here via SQLAlchemy ORM parameterization)
+```
+
+---
+
+## 📚 References
+
+- [Flask Documentation](https://flask.palletsprojects.com/)
+- [SQLAlchemy ORM](https://docs.sqlalchemy.org/)
+- [Flask-Bcrypt](https://flask-bcrypt.readthedocs.io/)
+- [Postman API Testing](https://www.postman.com/)
+- [OWASP API Security Top 10](https://owasp.org/www-project-api-security/)
+
+---
+
+## 👤 Author
+
+**Charles Ndirangu** — Squad 2, AfricaHackon  
+🔗 [GitHub](https://github.com/Seniorcaptain)
+
+---
+
+<div align="center"><sub>🐍 Build the API. Break the API. Secure the API.</sub></div>
